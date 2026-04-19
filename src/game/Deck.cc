@@ -1,6 +1,8 @@
 // #include "arrays.h"
 #include "Card.h"
 #include "Deck.h"
+#include <algorithm>
+#include <random>
 
 using namespace deck;
 using namespace card;
@@ -11,7 +13,7 @@ using namespace std;
 **
 ** deuce = 2, trey  = 3, four  = 5, five  = 7, ..., king  = 37, ace   = 41
 */
-int primes[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41 };
+static const int kPrimes[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41 };
 
 void Deck::init()
 {
@@ -20,26 +22,20 @@ void Deck::init()
     int n = 0;
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 13; j++, n++) {
-            cardlst[n] = primes[j] | (j << 8) | suits[i] | (1 << (16+j));
+            cardlst[n] = kPrimes[j] | (j << 8) | suits[i] | (1 << (16 + j));
         }
     }
 
     cout << "Deck init" << endl;
 }
 
-Deck Deck::shuffle()
+void Deck::shuffle()
 {
-    for (int i = 0; i < DECK_SIZE; i++) {
-        srand(time(NULL));
-        int j = rand() % DECK_SIZE;
-        int temp = cardlst[i];
-        cardlst[i] = cardlst[j];
-        cardlst[j] = temp;
-    }
+    static random_device rd;
+    static mt19937 gen(rd());
+    std::shuffle(cardlst, cardlst + DECK_SIZE, gen);
 
     cout << "Deck shuffle" << endl;
-
-    return *this;
 }
 
 Card Deck::draw()
@@ -58,10 +54,12 @@ Card Deck::draw()
     return card;
 }
 
-void Deck::copy(Deck deck)
+void Deck::copy(const Deck& deck)
 {
     this->cardidx = deck.cardidx;
-    this->cardlst[DECK_SIZE] = deck.cardlst[DECK_SIZE];
+    for (int i = 0; i < DECK_SIZE; ++i) {
+        this->cardlst[i] = deck.cardlst[i];
+    }
 
     cout << "Deck copy" << endl;
 }

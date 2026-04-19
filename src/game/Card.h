@@ -32,7 +32,16 @@ namespace card
         Card() : idx(0) {}
         Card(int index) : idx(index) {}
 
-        std::pair<char, char> getCard();
+        std::pair<std::string, std::string> getCard();
         std::string toString();
+        std::string toCode();
+        int getRank() const;
+        char getSuitCode() const;
+
+        Card& operator=(const Card& card)
+        {
+            idx = card.idx;
+            return *this;
+        }
     };
 }

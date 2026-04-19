@@ -1,72 +1,104 @@
 #include "connection/Socket.h"
-#include <vector>
+
+#include <iostream>
 #include <sstream>
-// #include "window_app/Window_app.h"
+#include <string>
+#include <vector>
 
 using namespace std;
-// using namespace window_app;
 using namespace connection;
 
 static const int PORT = 8080;
-static const int MAX_CLNT = 2;
 
-int clnt_cnt = 0;
-int clnt_socks[MAX_CLNT];
-pthread_mutex_t mutx;
-
-vector<string> split(const string &s, char delim) {
+namespace {
+vector<string> split(const string& s, char delim)
+{
     vector<string> elems;
     stringstream ss(s);
     string item;
     while (getline(ss, item, delim)) {
-    if (!item.empty()) {
-            elems.push_back(item);
-        }
+        if (!item.empty()) elems.push_back(item);
     }
     return elems;
 }
 
-int main(int argc, char *argv[])
+void show_hand(const string& payload)
 {
-    // auto app = Gtk::Application::create(argc, argv);
-    // WindowApp window_app(1280, 960);
-    // app->run(window_app);
+    vector<string> cards = split(payload, '|');
+    cout << "Your hand:" << endl;
+    for (size_t i = 0; i < cards.size(); ++i) {
+        cout << "  " << (i + 1) << ": " << cards[i] << endl;
+    }
+}
+}
 
-    while(true)
-    {
-        string data;
-        cin >> data;
+int main()
+{
+    Socket sock;
+    sock.create("127.0.0.1", PORT);
+    cout << "Connected to server." << endl;
 
-        Socket sock;
-        cout << "Greetings." << endl;
-        sock.create("127.0.0.1", PORT);
-        sock.request(data);
+    bool running = true;
+    while (running) {
+        string line = sock.response();
+        if (line.empty()) break;
 
-        // Receive and display the hand
-        string hand = sock.response();
-        vector<string> cards = split(hand, ' ');
-        cout << "Your hand is: ";
-        for (const string& card : cards) {
-            cout << card << " ";
+        if (line.rfind("HELLO ", 0) == 0) {
+            cout << "Assigned as Player " << line.substr(6) << endl;
+            continue;
         }
-        cout << endl;
-
-        // Ask for cards to exchange
-        cout << "Enter the numbers of the cards to exchange (1-5), separated by spaces. Enter 0 if you don't want to exchange any cards: ";
-        string cards_to_exchange;
-        cin >> cards_to_exchange;
-        sock.request(cards_to_exchange);
-
-        // Receive and display the new hand
-        string new_hand = sock.response();
-        cout << "Your new hand is: " << new_hand << endl;
-
-        // Receive and display the result
-        string result = sock.response();
-        cout << "Result: " << result << endl;
-
-        sock.finish();
+        if (line.rfind("GAME_OPTIONS ", 0) == 0) {
+            cout << "Selected game: POKER" << endl;
+            sock.request("GAME POKER");
+            continue;
+        }
+        if (line.rfind("HAND ", 0) == 0) {
+            show_hand(line.substr(5));
+            continue;
+        }
+        if (line == "REQUEST_EXCHANGE") {
+            cout << "Exchange card positions (1-5, separated by spaces, or 0): ";
+            string input;
+            getline(cin, input);
+            if (input.empty()) input = "0";
+            sock.request("EXCHANGE " + input);
+            continue;
+        }
+        if (line.rfind("INFO ", 0) == 0) {
+            cout << line.substr(5) << endl;
+            continue;
+        }
+        if (line.rfind("RESULT ", 0) == 0) {
+            cout << "Game result: " << line.substr(7) << endl;
+            continue;
+        }
+        if (line.rfind("RESULT_DETAIL ", 0) == 0) {
+            cout << "Detail: " << line.substr(14) << endl;
+            continue;
+        }
+        if (line == "REMATCH_PROMPT") {
+            cout << "Play again? (y/n): ";
+            string input;
+            getline(cin, input);
+            if (!input.empty() && (input[0] == 'y' || input[0] == 'Y')) {
+                sock.request("REMATCH YES");
+            } else {
+                sock.request("REMATCH NO");
+            }
+            continue;
+        }
+        if (line == "ROUND_NEXT") {
+            cout << "Next round started." << endl;
+            continue;
+        }
+        if (line == "SESSION_END") {
+            cout << "Session ended." << endl;
+            running = false;
+            continue;
+        }
+        cout << "Server: " << line << endl;
     }
 
+    sock.finish();
     return 0;
 }

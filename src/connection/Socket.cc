@@ -1,4 +1,6 @@
 #include "Socket.h"
+#include <sys/types.h>
+#include <cerrno>
 
 using namespace std;
 using namespace connection;
@@ -84,25 +86,57 @@ int Socket::serve(int port)
 
 void Socket::request(string str)
 {
-    send(this->sockfd, str.c_str(), str.size(), 0);
+    if (str.empty() || str.back() != '\n') {
+        str.push_back('\n');
+    }
 
-    cout << "Sent: " << str << endl;
+    size_t sent_total = 0;
+    while (sent_total < str.size()) {
+        ssize_t sent = send(this->sockfd, str.c_str() + sent_total, str.size() - sent_total, 0);
+        if (sent <= 0) {
+            perror("send failed");
+            exit(EXIT_FAILURE);
+        }
+        sent_total += static_cast<size_t>(sent);
+    }
+
+    cout << "Sent: " << str;
 }
 
 string Socket::response()
 {
-    char buff[1024] = {0};
-    read(this->sockfd, this->buff, 1024);
-    string str = string(this->buff);
+    while (true) {
+        size_t pos = recv_cache.find('\n');
+        if (pos != string::npos) {
+            string line = recv_cache.substr(0, pos);
+            recv_cache.erase(0, pos + 1);
+            cout << "Read: " << line << endl;
+            return line;
+        }
 
-    cout << "Read: " << buff << endl;
-    return str;
+        ssize_t read_size = read(this->sockfd, this->buff, sizeof(this->buff) - 1);
+        if (read_size < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == ECONNRESET || errno == ENOTCONN || errno == EBADF) {
+                return "";
+            }
+            perror("read failed");
+            return "";
+        }
+        if (read_size == 0) {
+            return "";
+        }
+
+        recv_cache.append(this->buff, static_cast<size_t>(read_size));
+    }
 }
 
 int Socket::finish()
 {
-    close(this->sockfd);
     shutdown(this->sockfd, SHUT_RDWR);
+    close(this->sockfd);
 
     return 0;
 }

@@ -1,0 +1,9 @@
+{
+  "images_dir": "resources/poker/images",
+  "suits": ["C", "H", "D", "S"],
+  "ranks": ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"],
+  "banner_start": "start.png",
+  "banner_win": "win.png",
+  "banner_lose": "lose.png",
+  "banner_draw": "draw.png"
+}

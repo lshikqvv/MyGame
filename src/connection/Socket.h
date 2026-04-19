@@ -17,6 +17,7 @@ namespace connection
         int sockfd;
         int cnctfd;
         char buff[1024] = {0};
+        std::string recv_cache;
 
         int create(const char* ip_addr, int port);
         int serve(int port);

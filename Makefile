@@ -1,6 +1,6 @@
 # compiler settings
 CC = g++
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -pthread
 LIBS = `pkg-config --cflags --libs gtkmm-3.0`
 
 SERVER_PROG = Server
@@ -10,9 +10,11 @@ CARD_PROG   = game/Card
 DECK_PROG   = game/Deck
 HAND_PROG   = game/Hand
 SOCKET_PROG = connection/Socket
-# WINDOW_PROG = window_app/Window_app
+GUI_CLIENT_PROG = GuiClient
+GUI_CLIENT_SRC = window_app/GuiClient
 SERVER_OBJECTS = server.o socket.o card.o deck.o hand.o array.o
 CLIENT_OBJECTS = client.o socket.o
+GUI_CLIENT_OBJECTS = gui_client.o socket.o
 BIN = ./build/bin
 OBJ = ./build/obj
 SRC = ./src
@@ -47,6 +49,8 @@ $(OBJ)/socket.o : $(SRC)/$(SOCKET_PROG).cc
 
 # $(OBJ)/window_app.o : $(SRC)/$(WINDOW_PROG).cc
 # 	$(CC) $(CFLAGS) $(LIBS) -c $< -o $@
+$(OBJ)/gui_client.o : $(SRC)/$(GUI_CLIENT_SRC).cc
+	$(CC) $(CFLAGS) $(LIBS) -c $< -o $@
 
 # link server program
 $(BIN)/$(SERVER_PROG): $(addprefix $(OBJ)/, $(SERVER_OBJECTS))
@@ -55,3 +59,8 @@ $(BIN)/$(SERVER_PROG): $(addprefix $(OBJ)/, $(SERVER_OBJECTS))
 # link client program
 $(BIN)/$(CLIENT_PROG): $(addprefix $(OBJ)/, $(CLIENT_OBJECTS))
 	$(LINK.o) $^ $(LDLIBS) -o $@
+
+gui: $(BIN)/$(GUI_CLIENT_PROG)
+
+$(BIN)/$(GUI_CLIENT_PROG): $(addprefix $(OBJ)/, $(GUI_CLIENT_OBJECTS))
+	$(CC) $(CFLAGS) $^ $(LIBS) -o $@

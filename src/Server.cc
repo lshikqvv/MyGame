@@ -1,4 +1,13 @@
-#include <pthread.h>     // pthread_create
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <iostream>
+#include <set>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "connection/Socket.h"
 #include "game/Deck.h"
@@ -10,94 +19,192 @@ using namespace deck;
 using namespace hand;
 
 static const int PORT = 8080;
+static const string GAME_POKER = "POKER";
 
-void *handler(void *arg)
+namespace {
+int create_listener(int port)
 {
-    Deck deck;
-    deck.init();
-    deck.shuffle();
-
-    Hand hand1;
-    Hand hand2;
-
-    while(true) {
-        Socket sock1, sock2;
-
-        hand1.make(deck);
-        hand2.make(deck);
-
-        hand1.sort();
-        hand2.sort();
-
-        hand1.show();
-        hand2.show();
-
-        string hand1Str = hand1.toString();
-        string hand2Str = hand2.toString();
-
-        cout << "Hand1: " << hand1Str << endl;
-        cout << "Hand2: " << hand2Str << endl;
-
-        sock1.request(hand1Str);
-        sock2.request(hand2Str);
-
-        sock1.request("Your turn");
-        hand1.exchange(deck);
-        hand1.sort();
-        hand1.show();
-        sock1.request(hand1.toString());
-
-        sock2.request("Opponent's turn");
-        hand2.exchange(deck);
-        hand2.sort();
-        hand2.show();
-        sock2.request(hand2.toString());
-
-        unsigned short score1 = hand1.judge();
-        unsigned short score2 = hand2.judge();
-
-        if (score1 < score2) {
-            cout << "Player 1 wins!" << endl;
-            sock1.request("You win!");
-            sock2.request("You lose!");
-        } else if (score1 > score2) {
-            cout << "Player 2 wins!" << endl;
-            sock1.request("You lose!");
-            sock2.request("You win!");
-        } else {
-            cout << "It's a draw!" << endl;
-            sock1.request("It's a draw!");
-            sock2.request("It's a draw!");
-        }
-        sock1.finish();
-        sock2.finish();
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener < 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
     }
+
+    int opt = 1;
+    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt failed");
+        exit(EXIT_FAILURE);
+    }
+
+    sockaddr_in addr {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
+
+    if (bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(listener, 4) < 0) {
+        perror("listen failed");
+        exit(EXIT_FAILURE);
+    }
+
+    return listener;
+}
+
+vector<int> parse_exchange_positions(const string& line)
+{
+    vector<int> positions;
+    if (line.rfind("EXCHANGE", 0) != 0) return positions;
+
+    string payload = line.substr(string("EXCHANGE").size());
+    for (char& c : payload) {
+        if (c == ',' || c == '|') c = ' ';
+    }
+
+    stringstream ss(payload);
+    int n = 0;
+    set<int> unique;
+    while (ss >> n) {
+        if (n == 0) {
+            unique.clear();
+            break;
+        }
+        if (n >= 1 && n <= 5) unique.insert(n);
+    }
+    positions.assign(unique.begin(), unique.end());
+    return positions;
+}
+
+bool parse_rematch_yes(const string& line)
+{
+    return line == "REMATCH YES";
+}
+
+void send_hand(Socket& player, Hand& h)
+{
+    player.request("HAND " + h.toCodeString());
+}
+
+string result_code_for_player(int cmp, bool is_player1)
+{
+    if (cmp == 0) return "DRAW";
+    if (is_player1) return (cmp > 0) ? "WIN" : "LOSE";
+    return (cmp < 0) ? "WIN" : "LOSE";
+}
+
+void send_result_detail(Socket& target, Hand& self, Hand& opp, const string& result_code)
+{
+    target.request(
+        "RESULT_DETAIL RESULT=" + result_code +
+        " SELF_ROLE=" + self.categoryName() +
+        " OPP_ROLE=" + opp.categoryName() +
+        " SELF_KEY=" + self.tiebreakString() +
+        " OPP_KEY=" + opp.tiebreakString()
+    );
+}
+
+bool handshake_game_selection(Socket& player, int player_no)
+{
+    player.request("HELLO " + to_string(player_no));
+    player.request("GAME_OPTIONS " + GAME_POKER);
+    string choice = player.response();
+    if (choice != "GAME " + GAME_POKER) {
+        player.request("SESSION_END");
+        return false;
+    }
+    return true;
+}
 }
 
 int main()
 {
-    Socket sock1, sock2;
+    int listener = create_listener(PORT);
+    cout << "Server started on port " << PORT << endl;
     cout << "Waiting for players..." << endl;
-    sock1.serve(PORT);
+
+    sockaddr_in client_addr {};
+    socklen_t client_len = sizeof(client_addr);
+
+    Socket player1;
+    Socket player2;
+    player1.sockfd = accept(listener, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+    if (player1.sockfd < 0) {
+        perror("accept player1 failed");
+        exit(EXIT_FAILURE);
+    }
     cout << "Player 1 connected" << endl;
-    sock2.serve(PORT);
+
+    player2.sockfd = accept(listener, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+    if (player2.sockfd < 0) {
+        perror("accept player2 failed");
+        exit(EXIT_FAILURE);
+    }
     cout << "Player 2 connected" << endl;
-    cout << "Game started" << endl;
 
-    pthread_t game_thread;
-
-    if (pthread_create(&game_thread, NULL, handler, NULL) < 0) {
-        perror("pthread_create failed");
-        exit(EXIT_FAILURE);
+    if (!handshake_game_selection(player1, 1) || !handshake_game_selection(player2, 2)) {
+        player1.finish();
+        player2.finish();
+        close(listener);
+        return 0;
     }
-    cout << "sock1: " << sock1.sockfd << endl;
-    if (pthread_create(&game_thread, NULL, handler, NULL) < 0) {
-        perror("pthread_create failed");
-        exit(EXIT_FAILURE);
+
+    bool continue_session = true;
+    while (continue_session) {
+        Deck d;
+        d.init();
+        d.shuffle();
+
+        Hand h1;
+        Hand h2;
+        h1.make(d);
+        h2.make(d);
+        h1.sort();
+        h2.sort();
+
+        send_hand(player1, h1);
+        send_hand(player2, h2);
+
+        player1.request("REQUEST_EXCHANGE");
+        player2.request("INFO Opponent is exchanging cards.");
+        h1.exchange(d, parse_exchange_positions(player1.response()));
+        h1.sort();
+        send_hand(player1, h1);
+
+        player2.request("REQUEST_EXCHANGE");
+        player1.request("INFO Opponent is exchanging cards.");
+        h2.exchange(d, parse_exchange_positions(player2.response()));
+        h2.sort();
+        send_hand(player2, h2);
+
+        int cmp = h1.compareTo(h2);
+        string r1 = result_code_for_player(cmp, true);
+        string r2 = result_code_for_player(cmp, false);
+
+        player1.request("RESULT " + r1);
+        player2.request("RESULT " + r2);
+        send_result_detail(player1, h1, h2, r1);
+        send_result_detail(player2, h2, h1, r2);
+
+        player1.request("REMATCH_PROMPT");
+        player2.request("REMATCH_PROMPT");
+        bool p1_yes = parse_rematch_yes(player1.response());
+        bool p2_yes = parse_rematch_yes(player2.response());
+        if (p1_yes && p2_yes) {
+            player1.request("ROUND_NEXT");
+            player2.request("ROUND_NEXT");
+            continue;
+        }
+
+        player1.request("SESSION_END");
+        player2.request("SESSION_END");
+        continue_session = false;
     }
-    cout << "sock2: " << sock2.sockfd << endl;
 
-    pthread_join(game_thread, NULL);
-
+    player1.finish();
+    player2.finish();
+    close(listener);
     return 0;
 }

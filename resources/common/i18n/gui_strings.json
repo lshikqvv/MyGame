@@ -1,0 +1,15 @@
+{
+  "status_connected": { "ja": "接続済み", "en": "Connected" },
+  "home_title": { "ja": "ゲームホーム", "en": "Game Home" },
+  "label_game": { "ja": "ゲーム", "en": "Game" },
+  "label_log": { "ja": "ログ", "en": "Log" },
+  "btn_home_start": { "ja": "スタート", "en": "Start" },
+  "btn_home_exit": { "ja": "終了", "en": "Exit" },
+  "btn_exchange": { "ja": "交換する", "en": "Exchange" },
+  "btn_rematch_yes": { "ja": "もう一度遊ぶ", "en": "Play Again" },
+  "btn_rematch_no": { "ja": "終わる", "en": "Finish" },
+  "label_language": { "ja": "言語", "en": "Language" },
+  "detail_prefix": { "ja": "勝敗理由: ", "en": "Reason: " },
+  "tab_game": { "ja": "ゲーム", "en": "Game" },
+  "tab_settings": { "ja": "設定", "en": "Settings" }
+}

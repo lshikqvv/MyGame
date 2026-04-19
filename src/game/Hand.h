@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <tuple>
+#include <vector>
 
 #include "arrays.h"
 #include "Card.h"
@@ -25,13 +26,18 @@ namespace hand
         card::Card hand[5];
 
         Hand();
-        void make(deck::Deck deck);
-        void exchange(deck::Deck deck);
+        void make(deck::Deck& deck);
+        void exchange(deck::Deck& deck, const std::vector<int>& positions);
         void sort();
         void show();
         std::string toString();
+        std::string toCodeString();
         unsigned find_fast(unsigned u);
         unsigned short judge();
         int rank(unsigned short val);
+        int category();
+        std::string categoryName();
+        std::string tiebreakString();
+        int compareTo(Hand& other);
     };
 }
